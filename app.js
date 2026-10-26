@@ -90,9 +90,16 @@
     show(shell("", [h("p", { class: "msg", text: "Loading…" })]));
   }
 
-  function renderError(text, retry) {
+  // A short code for what went wrong, shown in small print so a failure can be diagnosed.
+  function detailOf(e) {
+    var m = e && e.message ? String(e.message) : "";
+    return /^http-\d+$/.test(m) ? m : "no-response";
+  }
+
+  function renderError(text, retry, detail) {
     show(shell("", [
       h("p", { class: "msg", text: text }),
+      detail ? h("p", { class: "fine", text: "Technical detail: " + detail }) : null,
       h("button", { type: "button", class: "go", text: "Try again", onclick: retry })
     ]));
   }
@@ -107,9 +114,9 @@
       if (res === null) { renderLanding("This link is not recognised. Make sure you copied the whole link, or ask the DM to resend it."); return; }
       if (res.rolled) { renderResult(res); return; }
       renderQuestion(token, res.name, []);
-    }).catch(function () {
+    }).catch(function (e) {
       if (my !== run) return;
-      renderError("Could not reach the server. Check your connection and try again.", function () { startPlayer(token); });
+      renderError("Could not reach the server. Check your connection and try again.", function () { startPlayer(token); }, detailOf(e));
     });
   }
 
@@ -154,12 +161,12 @@
         if (res === null) { renderLanding("This link is not recognised. Make sure you copied the whole link, or ask the DM to resend it."); return; }
         if (res.error) { renderQuestion(token, name, []); return; }
         renderResult(res);
-      }).catch(function () {
+      }).catch(function (e) {
         if (timers.dice) { clearInterval(timers.dice); timers.dice = null; }
         if (my !== run) return;
         dieEl.className = "die";
         btn.disabled = false;
-        note.textContent = "Could not reach the server. Your answers are kept. Try the roll again.";
+        note.textContent = "Could not reach the server. Your answers are kept. Try the roll again. (" + detailOf(e) + ")";
       });
     }
   }
@@ -193,9 +200,9 @@
         dmState.data = res.players || [];
         dmState.at = new Date();
         renderDM(token, load);
-      }).catch(function () {
+      }).catch(function (e) {
         if (my !== run) return;
-        if (first) renderError("Could not reach the server. If the project has been idle, open it in Supabase and unpause it, then try again.", function () { startDM(token); });
+        if (first) renderError("Could not reach the server. If the project has been idle, open it in Supabase and unpause it, then try again.", function () { startDM(token); }, detailOf(e));
       });
     }
     load(true);
@@ -245,7 +252,7 @@
         if (dmState.confirm === p.slug) {
           actions.appendChild(h("button", { type: "button", class: "mini danger", text: "Confirm reset for " + p.name, onclick: function () {
             rpc("dm_reset", { d_token: token, p_slug: p.slug }).then(function () { dmState.confirm = null; reload(false); })
-              .catch(function () { dmState.confirm = null; renderError("The reset did not go through. Try again.", function () { startDM(token); }); });
+              .catch(function (e) { dmState.confirm = null; renderError("The reset did not go through. Try again.", function () { startDM(token); }, detailOf(e)); });
           } }));
           actions.appendChild(h("button", { type: "button", class: "mini", text: "Cancel", onclick: function () { dmState.confirm = null; renderDM(token, reload); } }));
         } else {
